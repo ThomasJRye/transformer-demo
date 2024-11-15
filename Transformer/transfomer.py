@@ -101,3 +101,42 @@ class TransformerTranslator(nn.Module):
         else:
             embedding = self.output_embedding(output_sequence)
             return self.decoder(self.encode_out, embedding)
+
+class TransformerGenerator(nn.Module):
+    def __init__(self, embed_dim, num_blocks, num_heads, encoder_vocab_size, output_vocab_size, CUDA=False):
+        super(TransformerGenerator, self).__init__()
+        self.encoder_embedding = Embeddings(encoder_vocab_size, embed_dim, CUDA=CUDA)
+        self.output_embedding = Embeddings(output_vocab_size, embed_dim, CUDA=CUDA)
+        self.encoder = Encoder(embed_dim, num_heads, num_blocks, CUDA=CUDA)
+        self.decoder = Decoder(embed_dim, num_heads, num_blocks, output_vocab_size, CUDA=CUDA)
+        self.encoded = False
+        self.device = torch.device("cuda:0" if CUDA else "cpu")
+
+    def encode(self, input_sequence):
+        embedding = self.encoder_embedding(input_sequence).to(self.device)
+        self.encode_out = self.encoder(embedding)
+        self.encoded = True
+    
+    def generate(self, start_token, max_length):
+        if not self.encoded:
+            print("ERROR::TransformerGenerator:: MUST ENCODE FIRST.")
+            return start_token
+
+        generated_tokens = [start_token]
+        for _ in range(max_length - 1):
+            current_sequence = torch.tensor(generated_tokens).unsqueeze(0).to(self.device)
+            embedding = self.output_embedding(current_sequence)
+            out = self.decoder(self.encode_out, embedding)
+            next_token = torch.argmax(out[:, -1, :], dim=1).item()
+            generated_tokens.append(next_token)
+
+        return generated_tokens
+    
+    def forward(self, output_sequence):
+        if not self.encoded:
+            print("ERROR::TransformerGenerator:: MUST ENCODE FIRST.")
+            return output_sequence
+        else:
+            embedding = self.output_embedding(output_sequence)
+            return self.decoder(self.encode_out, embedding)
+        
